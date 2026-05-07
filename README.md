@@ -29,14 +29,14 @@ graph TD
 
     G[🎲 Generate 500 Mock Items<br/>random types & departments] --> H[Batch Processor<br/>100 items per batch]
     
-    H --> I[Migrate Item<br/>90% success / 10% random error]
+    H --> I[Migrate Item]
     I -->|✅ Success| J[Add to migrated list]
     I -->|❌ Error| K[classify_error]
     K -->|Retryable| L[Retry up to 3x]
     K -->|Permanent| M[Log & skip]
     L --> I
 
-    J --> N[Save Checkpoint<br/>Python list in RAM]
+    J --> N[Save Checkpoint<br/>Python list]
     N --> O{More batches?}
     O -->|Yes| H
     O -->|No| P[✅ Done]
