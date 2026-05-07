@@ -1,54 +1,55 @@
 # Migration Patterns — Cross-Tenant Data Transfer
 
-> Demonstrates the **migration architecture patterns** I built for cross-tenant Microsoft Teams & SharePoint migrations — incremental sync, entitlement mapping, checkpoint-based rollback, and real-time monitoring.
+> A runnable demo of the **migration architecture patterns** I used for cross-tenant Microsoft Teams & SharePoint migrations — entitlement mapping, batch processing with retry, in-memory checkpointing, and rollback simulation. Pure Python, no external dependencies.
 
-## What This Showcases
+## What This Demo Does
 
-Architecture patterns from the **Cross-Tenant Migration System** I built handling 10,000+ users and 2TB+ SharePoint data — in simplified, runnable Python.
+Simulates migrating 500 items (Teams channels, SharePoint sites, mailboxes, OneDrive) across tenants using mock data — all in-memory, single-run, no persistence. Demonstrates the **patterns**, not the infrastructure.
 
 ### Patterns Demonstrated
 
-| Pattern | Implementation |
+| Pattern | What the demo does |
 |---|---|
-| **Incremental Migration** | Delta-sync — only transfer changed items since last checkpoint |
-| **Checkpoint & Rollback** | Save progress at each batch, rollback to last checkpoint on failure |
-| **Entitlement Mapping** | Map permissions across tenants with conflict resolution |
-| **Batch Processing** | Process large datasets in configurable batches with retry |
-| **Progress Tracking** | Real-time migration status with per-entity progress |
-| **Error Classification** | Categorize failures (retryable vs permanent) for handling |
+| **Entitlement Mapping** | Maps 5 mock users' permissions from source → target tenant, detects conflicts (unmapped groups, guest access) |
+| **Batch Processing** | Splits 500 items into batches of 100, processes each with 90% simulated success rate |
+| **Retry with Classification** | Failed items are classified (retryable vs permanent) — retryable items retry up to 3 times |
+| **Checkpoint (In-Memory)** | After each successful batch, saves a checkpoint to a Python list — used for rollback |
+| **Rollback** | Reverts to previous checkpoint, reports which items need reprocessing |
+| **Progress Tracking** | Renders a progress bar with success/fail counts and throughput rate |
 
-## Architecture
+## Architecture (What the Demo Actually Runs)
 
 ```mermaid
 graph TD
-    A[🏢 Source Tenant] --> B[Extract via Graph API]
-    B --> C[Entitlement Mapping]
-    C --> D{Conflicts?}
-    D -->|No| E[Batch Processor]
-    D -->|Yes| F[Conflict Resolution]
-    F --> E
+    A[📋 Mock Permissions<br/>5 users in a dict] --> B[Entitlement Mapper]
+    B --> C{Conflicts?}
+    C -->|Unmapped group| D[Log conflict, skip]
+    C -->|Guest role| E[Remap to ExternalUser]
+    C -->|Clean| F[Map to target groups]
+
+    G[🎲 Generate 500 Mock Items<br/>random types & departments] --> H[Batch Processor<br/>100 items per batch]
     
-    E --> G{Success?}
-    G -->|✅ Yes| H[💾 Save Checkpoint]
-    G -->|❌ Retryable| I[Retry with Backoff]
-    G -->|❌ Permanent| J[Error Log & Skip]
-    I --> E
-    
-    H --> K{More Batches?}
-    K -->|Yes| E
-    K -->|No| L[✅ Migration Complete]
-    
-    H --> M[📊 Progress Tracker]
-    
-    N[⚠️ Failure Detected] --> O[Rollback to Checkpoint]
-    O --> E
+    H --> I[Migrate Item<br/>90% success / 10% random error]
+    I -->|✅ Success| J[Add to migrated list]
+    I -->|❌ Error| K[classify_error]
+    K -->|Retryable| L[Retry up to 3x]
+    K -->|Permanent| M[Log & skip]
+    L --> I
+
+    J --> N[Save Checkpoint<br/>Python list in RAM]
+    N --> O{More batches?}
+    O -->|Yes| H
+    O -->|No| P[✅ Done]
+
+    N --> Q[Rollback Demo<br/>revert last checkpoint]
+    N --> R[📊 Progress Bar]
 
     style A fill:#1e3a5f,stroke:#64ffda,color:#e2e8f0
-    style C fill:#2d1b69,stroke:#a78bfa,color:#e2e8f0
-    style H fill:#064e3b,stroke:#34d399,color:#e2e8f0
-    style O fill:#4c0519,stroke:#f87171,color:#e2e8f0
-    style F fill:#4a3000,stroke:#fbbf24,color:#e2e8f0
-    style L fill:#064e3b,stroke:#34d399,color:#e2e8f0
+    style G fill:#1e3a5f,stroke:#64ffda,color:#e2e8f0
+    style N fill:#064e3b,stroke:#34d399,color:#e2e8f0
+    style Q fill:#4c0519,stroke:#f87171,color:#e2e8f0
+    style K fill:#4a3000,stroke:#fbbf24,color:#e2e8f0
+    style P fill:#064e3b,stroke:#34d399,color:#e2e8f0
 ```
 
 ## Running
@@ -57,16 +58,37 @@ graph TD
 python -m src.migration_demo
 ```
 
-No external dependencies — pure Python.
+No external dependencies — pure Python. Runs in <1 second.
+
+## Example Output
+
+```
+📋 Step 1: Entitlement Mapping
+  Mapped 5 users
+  Conflicts: 2
+    - unmapped_group: 1
+    - guest_access: 1
+
+📦 Step 2: Batch Processing (500 items, batch_size=100)
+  [████████████████████████████████████░░░░] 91.0%  (455/500)
+  Succeeded: 455 | Failed: 45
+  Retries: 12
+  Checkpoints: 5
+
+🔄 Step 3: Checkpoint Rollback Demo
+  Rolled back to: cp-0003
+  Batches reverted: 1
+  Items to reprocess: 92
+```
 
 ## Project Structure
 
 ```
 src/
-├── checkpoint.py      # Checkpoint save/restore for rollback
-├── entitlement.py     # Permission mapping across tenants
-├── batch_processor.py # Batch processing with retry logic
-├── error_handler.py   # Error classification (retryable vs permanent)
-├── progress.py        # Real-time progress tracking
-└── migration_demo.py  # End-to-end demo runner
+├── entitlement.py     # Maps permissions across tenants with conflict detection
+├── batch_processor.py # Processes items in batches with retry logic
+├── error_handler.py   # Classifies errors as retryable vs permanent
+├── checkpoint.py      # In-memory checkpoint save/rollback (Python list)
+├── progress.py        # Progress bar + throughput stats
+└── migration_demo.py  # Orchestrates all 3 steps
 ```
